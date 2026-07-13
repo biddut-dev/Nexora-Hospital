@@ -206,7 +206,7 @@ export default function CommandCenterPage() {
               <YAxis tick={{ fontSize: 10 }} tickLine={false} axisLine={false} tickFormatter={(v) => `৳${(v / 1000).toFixed(0)}K`} />
               <Tooltip
                 contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: "8px", fontSize: "12px" }}
-                formatter={(v: number) => [`৳${v.toLocaleString()}`, undefined]}
+                formatter={(v: any) => [`৳${Number(v).toLocaleString()}`, undefined]}
               />
               <Area type="monotone" dataKey="total" stroke="#16a34a" strokeWidth={2} fill="url(#totalGrad)" name="Total" />
               <Area type="monotone" dataKey="opd" stroke="#0ea5e9" strokeWidth={1.5} fill="url(#opdGrad)" name="OPD" />

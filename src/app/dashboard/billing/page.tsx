@@ -56,7 +56,7 @@ export default function BillingPage() {
               <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
               <XAxis dataKey="date" tick={{ fontSize: 10 }} tickLine={false} axisLine={false} />
               <YAxis tick={{ fontSize: 10 }} tickLine={false} axisLine={false} tickFormatter={(v) => `৳${(v / 1000).toFixed(0)}K`} />
-              <Tooltip contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: "8px", fontSize: "12px" }} formatter={(v: number) => [`৳${v.toLocaleString()}`, undefined]} />
+              <Tooltip contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: "8px", fontSize: "12px" }} formatter={(v: any) => [`৳${Number(v).toLocaleString()}`, undefined]} />
               <Bar dataKey="opd" fill="#16a34a" name="OPD" radius={[2, 2, 0, 0]} />
               <Bar dataKey="ipd" fill="#0ea5e9" name="IPD" radius={[2, 2, 0, 0]} />
               <Bar dataKey="pharmacy" fill="#f59e0b" name="Pharmacy" radius={[2, 2, 0, 0]} />

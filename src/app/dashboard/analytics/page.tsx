@@ -90,7 +90,7 @@ export default function AnalyticsPage() {
             <XAxis dataKey="date" tick={{ fontSize: 10 }} tickLine={false} axisLine={false} />
             <YAxis tick={{ fontSize: 10 }} tickLine={false} axisLine={false} tickFormatter={(v) => `৳${(v / 1000).toFixed(0)}K`} />
             <Tooltip contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: "8px", fontSize: "12px" }}
-              formatter={(v: number) => [`৳${v.toLocaleString()}`, undefined]} />
+              formatter={(v: any) => [`৳${Number(v).toLocaleString()}`, undefined]} />
             <Legend wrapperStyle={{ fontSize: "11px" }} />
             <Area type="monotone" dataKey="opd" stroke={COLORS[0]} strokeWidth={2} fill={`url(#grad_opd)`} name="OPD" />
             <Area type="monotone" dataKey="ipd" stroke={COLORS[1]} strokeWidth={2} fill={`url(#grad_ipd)`} name="IPD" />
