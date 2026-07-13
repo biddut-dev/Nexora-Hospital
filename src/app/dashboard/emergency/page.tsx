@@ -1,9 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import { mockAmbulances } from "@/lib/mock-data";
 import { cn } from "@/lib/utils";
 import { AlertTriangle, Activity, Clock, Truck, Phone, MapPin, Zap, Heart, CheckCircle, User } from "lucide-react";
+import { useAppStore } from "@/lib/store";
+import { Modal } from "@/components/ui/Modal";
 
 interface EmergencyPatient {
   id: string;
@@ -28,6 +29,36 @@ const emergencyPatients: EmergencyPatient[] = [
 
 export default function EmergencyPage() {
   const [selectedPriority, setSelectedPriority] = useState<"all" | "critical" | "urgent" | "stable">("all");
+  const { ambulances, dispatchAmbulance } = useAppStore();
+  const [isDispatchOpen, setIsDispatchOpen] = useState(false);
+  const [selectedAmbId, setSelectedAmbId] = useState<string | null>(null);
+
+  const [formData, setFormData] = useState({
+    location: "",
+    refDetails: ""
+  });
+
+  const availableAmbulances = ambulances.filter(a => a.status === 'available');
+
+  const handleOpenDispatch = () => {
+    if (availableAmbulances.length > 0) {
+      setSelectedAmbId(availableAmbulances[0].id);
+      setIsDispatchOpen(true);
+    } else {
+      alert("No ambulances available currently!");
+    }
+  };
+
+  const handleDispatch = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedAmbId || !formData.location || !formData.refDetails) return;
+    
+    dispatchAmbulance(selectedAmbId, formData.location, formData.refDetails);
+    setIsDispatchOpen(false);
+    setSelectedAmbId(null);
+    setFormData({ location: "", refDetails: "" });
+    alert("Ambulance dispatched successfully!");
+  };
 
   const filtered = selectedPriority === "all" ? emergencyPatients : emergencyPatients.filter((p) => p.priority === selectedPriority);
 
@@ -38,9 +69,9 @@ export default function EmergencyPage() {
   };
 
   const priorityStyle = {
-    critical: "border-red-500 bg-red-50 dark:bg-red-900/10",
-    urgent: "border-amber-500 bg-amber-50 dark:bg-amber-900/10",
-    stable: "border-green-500 bg-green-50 dark:bg-green-900/10",
+    critical: "border-red-500 bg-red-50 dark:bg-red-900/10 border-2",
+    urgent: "border-amber-500 bg-amber-50 dark:bg-amber-900/10 border-2",
+    stable: "border-green-500 bg-green-50 dark:bg-green-900/10 border-2",
   };
 
   const priorityBadge = {
@@ -66,9 +97,12 @@ export default function EmergencyPage() {
           </div>
           <p className="text-muted-foreground text-sm">Real-time emergency triage and patient management</p>
         </div>
-        <button className="flex items-center gap-2 px-4 py-2.5 bg-red-600 hover:bg-red-700 text-white text-sm font-semibold rounded-xl transition-colors">
+        <button 
+          onClick={handleOpenDispatch}
+          className="flex items-center gap-2 px-4 py-2.5 bg-red-600 hover:bg-red-700 text-white text-sm font-semibold rounded-xl transition-colors"
+        >
           <Phone className="w-4 h-4" />
-          Dispatch Ambulance
+          Dispatch Ambulance ({availableAmbulances.length} available)
         </button>
       </div>
 
@@ -83,11 +117,8 @@ export default function EmergencyPage() {
             key={s.priority}
             onClick={() => setSelectedPriority(selectedPriority === s.priority as any ? "all" : s.priority as any)}
             className={cn(
-              "nexora-card p-4 flex items-center gap-3 transition-all",
-              selectedPriority === s.priority && "ring-2",
-              selectedPriority === s.priority && s.priority === "critical" ? "ring-red-500" :
-              selectedPriority === s.priority && s.priority === "urgent" ? "ring-amber-500" :
-              selectedPriority === s.priority && s.priority === "stable" ? "ring-green-500" : ""
+              "nexora-card p-4 flex items-center gap-3 transition-all border-border",
+              selectedPriority === s.priority && "ring-2 ring-nexora-500"
             )}
           >
             <div className={`w-12 h-12 ${s.bg} rounded-xl flex items-center justify-center flex-shrink-0`}>
@@ -101,125 +132,86 @@ export default function EmergencyPage() {
         ))}
       </div>
 
-      {/* Main Grid */}
+      {/* Triage list */}
       <div className="grid lg:grid-cols-3 gap-6">
-        {/* Triage Board — takes 2 cols */}
-        <div className="lg:col-span-2 space-y-3">
-          <h3 className="font-semibold text-foreground">Triage Board</h3>
-          {filtered.map((patient) => (
-            <div
-              key={patient.id}
-              className={cn("rounded-xl border-l-4 p-4 transition-all hover:shadow-md", priorityStyle[patient.priority])}
-            >
-              <div className="flex items-start justify-between gap-3">
-                <div className="flex items-start gap-3 flex-1 min-w-0">
-                  <div className="w-10 h-10 rounded-full bg-white dark:bg-gray-900 border-2 border-current flex items-center justify-center text-sm font-bold flex-shrink-0"
-                    style={{ borderColor: patient.priority === "critical" ? "#ef4444" : patient.priority === "urgent" ? "#f59e0b" : "#22c55e" }}>
-                    {patient.name.charAt(0)}
+        <div className="lg:col-span-2 space-y-4">
+          <h3 className="font-semibold text-lg text-foreground">Active Triage Queue</h3>
+          <div className="space-y-3">
+            {filtered.map((p) => (
+              <div key={p.id} className={cn("nexora-card p-4 border flex items-start gap-4 transition-all", priorityStyle[p.priority])}>
+                <div className={cn("w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm", priorityBadge[p.priority])}>
+                  {p.name.charAt(0)}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-1 flex-wrap">
+                    <h4 className="font-bold text-foreground">{p.name}</h4>
+                    <span className="text-xs text-muted-foreground">({p.age}y)</span>
+                    <span className={cn("text-[9px] font-bold px-2 py-0.5 rounded-full uppercase", priorityBadge[p.priority])}>
+                      {p.priority}
+                    </span>
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <p className="font-semibold text-foreground">{patient.name}</p>
-                      <span className="text-xs text-muted-foreground">{patient.age}y</span>
-                      <span className={cn("text-[10px] font-bold px-2 py-0.5 rounded-full uppercase", priorityBadge[patient.priority])}>
-                        {patient.priority}
-                      </span>
-                    </div>
-                    <p className="text-sm text-muted-foreground mt-0.5">{patient.issue}</p>
+                  <p className="text-xs text-muted-foreground mb-2"><span className="font-medium text-foreground">Issue:</span> {p.issue}</p>
+                  <div className="flex items-center gap-4 text-[11px] text-muted-foreground flex-wrap">
+                    <span className="flex items-center gap-1"><Clock className="w-3.5 h-3.5" />Arrived: {p.arrivalTime}</span>
+                    <span className="flex items-center gap-1"><Heart className="w-3.5 h-3.5 text-red-500 animate-pulse" />Doctor: {p.doctor}</span>
+                    <span className="flex items-center gap-1"><User className="w-3.5 h-3.5" />Bed: {p.bed}</span>
                   </div>
                 </div>
-                <div className="text-right flex-shrink-0">
-                  <p className="text-xs text-muted-foreground">Arrived</p>
-                  <p className="text-sm font-bold text-foreground">{patient.arrivalTime}</p>
+                <div className="flex flex-col items-end gap-2">
+                  <span className="text-xs bg-white dark:bg-gray-800 border border-border px-2 py-1 rounded-lg text-foreground font-medium shadow-sm">
+                    {p.status}
+                  </span>
                 </div>
               </div>
-              <div className="flex items-center gap-4 mt-3 pt-3 border-t border-black/5 dark:border-white/5 text-xs text-muted-foreground flex-wrap">
-                <span className="flex items-center gap-1"><Truck className="w-3.5 h-3.5" /> Bed: <strong className="text-foreground">{patient.bed}</strong></span>
-                <span className="flex items-center gap-1"><User className="w-3.5 h-3.5" /> {patient.doctor}</span>
-                <span className="ml-auto font-medium text-foreground">{patient.status}</span>
-              </div>
-            </div>
-          ))}
+            ))}
+          </div>
         </div>
 
-        {/* Right Panel */}
+        {/* Live ambulances */}
         <div className="space-y-4">
-          {/* Ambulance Arrival */}
-          <div className="nexora-card p-5">
-            <h3 className="font-semibold mb-3 flex items-center gap-2">
-              <Truck className="w-4 h-4 text-blue-500" />
-              Ambulance Status
-            </h3>
-            <div className="space-y-2">
-              {mockAmbulances.map((amb) => (
-                <div key={amb.id} className={cn(
-                  "flex items-center gap-2 p-2.5 rounded-lg text-xs border",
-                  amb.status === "available" ? "border-green-200 bg-green-50 dark:bg-green-900/10 text-green-700" :
-                  amb.status === "dispatched" ? "border-blue-200 bg-blue-50 dark:bg-blue-900/10 text-blue-700" :
-                  amb.status === "returning" ? "border-amber-200 bg-amber-50 dark:bg-amber-900/10 text-amber-700" :
-                  "border-gray-200 bg-gray-50 dark:bg-gray-900/10 text-gray-600"
-                )}>
-                  <Truck className="w-3.5 h-3.5 flex-shrink-0" />
-                  <div className="flex-1 min-w-0">
-                    <p className="font-semibold truncate">{amb.vehicleNumber}</p>
-                    <p className="opacity-70 truncate">{amb.location}</p>
-                  </div>
-                  <span className="capitalize font-medium">{amb.status}</span>
+          <h3 className="font-semibold text-lg text-foreground">Ambulance Status</h3>
+          <div className="space-y-3">
+            {ambulances.slice(0, 4).map((amb) => (
+              <div key={amb.id} className="nexora-card p-4 border border-border">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="font-bold text-sm text-foreground">{amb.vehicleNumber}</span>
+                  <span className={cn("text-[9px] font-bold px-2 py-0.5 rounded-full capitalize",
+                    amb.status === "available" ? "bg-green-100 text-green-700" : "bg-blue-100 text-blue-700"
+                  )}>{amb.status}</span>
                 </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Emergency Vitals Monitor */}
-          <div className="nexora-card p-5">
-            <h3 className="font-semibold mb-3 flex items-center gap-2">
-              <Heart className="w-4 h-4 text-red-500" />
-              Critical Vitals Monitor
-            </h3>
-            <div className="space-y-3">
-              {[
-                { name: "Unknown Male", hr: 112, bp: "148/92", spo2: 91, status: "critical" },
-                { name: "Shirin Sultana", hr: 134, bp: "88/60", spo2: 94, status: "critical" },
-              ].map((v) => (
-                <div key={v.name} className="p-3 rounded-xl bg-red-50 dark:bg-red-900/10 border border-red-200 dark:border-red-800">
-                  <p className="text-xs font-semibold text-red-700 dark:text-red-400 mb-2">{v.name}</p>
-                  <div className="grid grid-cols-3 gap-2 text-center">
-                    <div>
-                      <p className="text-lg font-bold text-red-600">{v.hr}</p>
-                      <p className="text-[10px] text-muted-foreground">BPM</p>
-                    </div>
-                    <div>
-                      <p className="text-sm font-bold text-red-600">{v.bp}</p>
-                      <p className="text-[10px] text-muted-foreground">B/P</p>
-                    </div>
-                    <div>
-                      <p className="text-lg font-bold text-red-600">{v.spo2}%</p>
-                      <p className="text-[10px] text-muted-foreground">SpO₂</p>
-                    </div>
-                  </div>
+                <div className="space-y-1 text-xs text-muted-foreground">
+                  <p className="flex items-center gap-1.5"><MapPin className="w-3.5 h-3.5" />{amb.location}</p>
+                  {amb.assignedTo && <p className="flex items-center gap-1.5 text-blue-600 font-medium"><AlertTriangle className="w-3.5 h-3.5" />{amb.assignedTo}</p>}
                 </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Quick actions */}
-          <div className="nexora-card p-5">
-            <h3 className="font-semibold mb-3">Quick Actions</h3>
-            <div className="grid grid-cols-2 gap-2">
-              {[
-                { label: "Call Code Blue", color: "bg-blue-600 hover:bg-blue-700" },
-                { label: "OT Booking", color: "bg-purple-600 hover:bg-purple-700" },
-                { label: "Blood Request", color: "bg-red-600 hover:bg-red-700" },
-                { label: "ICU Transfer", color: "bg-amber-600 hover:bg-amber-700" },
-              ].map((a) => (
-                <button key={a.label} className={`${a.color} text-white text-xs font-medium py-2.5 px-3 rounded-lg transition-colors`}>
-                  {a.label}
-                </button>
-              ))}
-            </div>
+              </div>
+            ))}
           </div>
         </div>
       </div>
+
+      {/* Dispatch Modal */}
+      <Modal isOpen={isDispatchOpen} onClose={() => setIsDispatchOpen(false)} title="Dispatch Emergency Ambulance">
+        <form onSubmit={handleDispatch} className="space-y-4">
+          <div className="space-y-1">
+            <label className="text-xs font-medium">Emergency Location / Address</label>
+            <input required placeholder="e.g., Road 2, Sector 3, Uttara, Dhaka" value={formData.location} onChange={e => setFormData({...formData, location: e.target.value})} className="w-full px-3 py-2 bg-muted rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-nexora-400 border border-border" />
+          </div>
+          
+          <div className="space-y-1">
+            <label className="text-xs font-medium">Assigned Case Reference / Details</label>
+            <input required placeholder="e.g., Trauma Call #9042" value={formData.refDetails} onChange={e => setFormData({...formData, refDetails: e.target.value})} className="w-full px-3 py-2 bg-muted rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-nexora-400 border border-border" />
+          </div>
+
+          <div className="pt-4 flex justify-end gap-2">
+            <button type="button" onClick={() => setIsDispatchOpen(false)} className="px-4 py-2 text-sm font-medium hover:bg-muted rounded-lg transition-colors">
+              Cancel
+            </button>
+            <button type="submit" className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-sm font-medium rounded-lg transition-colors">
+              Dispatch Now
+            </button>
+          </div>
+        </form>
+      </Modal>
     </div>
   );
 }

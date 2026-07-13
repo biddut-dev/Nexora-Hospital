@@ -1,14 +1,53 @@
 "use client";
 
 import { useState } from "react";
-import { mockMedicines } from "@/lib/mock-data";
 import { cn } from "@/lib/utils";
-import { PillIcon, AlertTriangle, TrendingDown, ShoppingCart, Search, Package, BrainCircuit } from "lucide-react";
+import { PillIcon, AlertTriangle, TrendingDown, ShoppingCart, Search, Package, BrainCircuit, Plus } from "lucide-react";
+import { useAppStore } from "@/lib/store";
+import { Modal } from "@/components/ui/Modal";
 
 export default function PharmacyPage() {
   const [search, setSearch] = useState("");
-  const lowStock = mockMedicines.filter((m) => m.stock < m.reorderLevel * 0.5);
-  const filtered = mockMedicines.filter((m) => m.name.toLowerCase().includes(search.toLowerCase()));
+  const { medicines, addMedicine } = useAppStore();
+  const [isOpen, setIsOpen] = useState(false);
+  
+  // Medicine form state
+  const [formData, setFormData] = useState({
+    name: "",
+    category: "Antibiotic",
+    stock: 100,
+    unit: "Tablet",
+    price: 5,
+    expiryDate: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+    manufacturer: "Square Pharma",
+    reorderLevel: 200
+  });
+
+  const lowStock = medicines.filter((m) => m.stock < m.reorderLevel * 0.5);
+  const filtered = medicines.filter((m) => m.name.toLowerCase().includes(search.toLowerCase()));
+
+  const handleAddMedicine = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!formData.name) return;
+
+    addMedicine({
+      ...formData,
+      stock: Number(formData.stock),
+      price: Number(formData.price),
+      reorderLevel: Number(formData.reorderLevel)
+    });
+    setIsOpen(false);
+    setFormData({
+      name: "",
+      category: "Antibiotic",
+      stock: 100,
+      unit: "Tablet",
+      price: 5,
+      expiryDate: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+      manufacturer: "Square Pharma",
+      reorderLevel: 200
+    });
+  };
 
   return (
     <div className="space-y-6">
@@ -17,20 +56,29 @@ export default function PharmacyPage() {
           <h1 className="text-2xl font-bold">Pharmacy</h1>
           <p className="text-muted-foreground text-sm mt-1">Medicine inventory, dispensing & AI drug interaction detection</p>
         </div>
-        <button className="flex items-center gap-2 px-4 py-2.5 bg-nexora-600 hover:bg-nexora-700 text-white text-sm font-medium rounded-xl transition-colors">
-          <ShoppingCart className="w-4 h-4" />
-          New Purchase Order
-        </button>
+        <div className="flex gap-2">
+          <button 
+            onClick={() => setIsOpen(true)}
+            className="flex items-center gap-2 px-4 py-2.5 bg-nexora-600 hover:bg-nexora-700 text-white text-sm font-medium rounded-xl transition-colors"
+          >
+            <Plus className="w-4 h-4" />
+            Add Medicine
+          </button>
+          <button className="flex items-center gap-2 px-4 py-2.5 border border-border hover:bg-muted text-sm font-medium rounded-xl transition-colors text-foreground">
+            <ShoppingCart className="w-4 h-4" />
+            New Purchase Order
+          </button>
+        </div>
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {[
-          { title: "Total Medicines", value: mockMedicines.length + 284, icon: Package, color: "text-blue-600", bg: "bg-blue-50 dark:bg-blue-900/20" },
+          { title: "Total Medicines", value: medicines.length, icon: Package, color: "text-blue-600", bg: "bg-blue-50 dark:bg-blue-900/20" },
           { title: "Low Stock Alerts", value: lowStock.length, icon: AlertTriangle, color: "text-amber-600", bg: "bg-amber-50 dark:bg-amber-900/20" },
           { title: "Dispensed Today", value: 142, icon: PillIcon, color: "text-nexora-600", bg: "bg-nexora-50 dark:bg-nexora-900/20" },
-          { title: "Expiring Soon", value: 3, icon: TrendingDown, color: "text-red-600", bg: "bg-red-50 dark:bg-red-900/20" },
+          { title: "Expiring Soon", value: medicines.filter(m=>new Date(m.expiryDate) < new Date(Date.now() + 60*24*60*60*1000)).length, icon: TrendingDown, color: "text-red-600", bg: "bg-red-50 dark:bg-red-900/20" },
         ].map((s) => (
-          <div key={s.title} className="nexora-card p-4 flex items-center gap-3">
+          <div key={s.title} className="nexora-card p-4 flex items-center gap-3 border-border">
             <div className={`w-10 h-10 ${s.bg} rounded-xl flex items-center justify-center flex-shrink-0`}>
               <s.icon className={`w-5 h-5 ${s.color}`} />
             </div>
@@ -62,19 +110,19 @@ export default function PharmacyPage() {
       </div>
 
       {/* Inventory Table */}
-      <div className="nexora-card">
+      <div className="nexora-card border-border">
         <div className="p-5 border-b border-border flex items-center gap-3 flex-wrap">
           <h3 className="font-semibold">Medicine Inventory</h3>
           <div className="ml-auto relative">
             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
-            <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search medicines..." className="pl-8 pr-3 py-2 text-xs bg-muted rounded-lg focus:outline-none w-48" />
+            <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search medicines..." className="pl-8 pr-3 py-2 text-xs bg-muted rounded-lg focus:outline-none w-48 border border-border" />
           </div>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-border">
-                {["Name", "Category", "Stock", "Unit", "Price", "Expiry", "Status"].map((h) => (
+                {["Name", "Category", "Stock", "Unit", "Price", "Expiry", "Manufacturer"].map((h) => (
                   <th key={h} className="text-left text-xs font-medium text-muted-foreground uppercase py-3 px-4">{h}</th>
                 ))}
               </tr>
@@ -98,14 +146,7 @@ export default function PharmacyPage() {
                     <td className="py-3 px-4 text-xs text-muted-foreground">{med.unit}</td>
                     <td className="py-3 px-4 text-xs">৳{med.price}</td>
                     <td className="py-3 px-4 text-xs text-muted-foreground">{med.expiryDate}</td>
-                    <td className="py-3 px-4">
-                      <span className={cn("text-[10px] font-medium px-2 py-0.5 rounded-full",
-                        isCritical ? "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400" :
-                        isLow ? "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400" :
-                        "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400")}>
-                        {isCritical ? "Critical" : isLow ? "Low Stock" : "In Stock"}
-                      </span>
-                    </td>
+                    <td className="py-3 px-4 text-xs text-muted-foreground">{med.manufacturer || "—"}</td>
                   </tr>
                 );
               })}
@@ -113,6 +154,76 @@ export default function PharmacyPage() {
           </table>
         </div>
       </div>
+
+      {/* Add Medicine Modal */}
+      <Modal isOpen={isOpen} onClose={() => setIsOpen(false)} title="Register New Medicine">
+        <form onSubmit={handleAddMedicine} className="space-y-4">
+          <div className="space-y-1">
+            <label className="text-xs font-medium">Medicine Name</label>
+            <input required placeholder="e.g., Napa Extra 500mg" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} className="w-full px-3 py-2 bg-muted rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-nexora-400 border border-border" />
+          </div>
+          
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-1">
+              <label className="text-xs font-medium">Category</label>
+              <select value={formData.category} onChange={e => setFormData({...formData, category: e.target.value})} className="w-full px-3 py-2 bg-muted rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-nexora-400 border border-border">
+                <option>Antibiotic</option>
+                <option>Antidiabetic</option>
+                <option>Cardiovascular</option>
+                <option>GI (Gastrointestinal)</option>
+                <option>Analgesic (Painkiller)</option>
+                <option>Vaccine</option>
+              </select>
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs font-medium">Manufacturer</label>
+              <input required value={formData.manufacturer} onChange={e => setFormData({...formData, manufacturer: e.target.value})} className="w-full px-3 py-2 bg-muted rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-nexora-400 border border-border" />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-1">
+              <label className="text-xs font-medium">Initial Stock</label>
+              <input required type="number" value={formData.stock} onChange={e => setFormData({...formData, stock: Number(e.target.value)})} className="w-full px-3 py-2 bg-muted rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-nexora-400 border border-border" />
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs font-medium">Unit Type</label>
+              <select value={formData.unit} onChange={e => setFormData({...formData, unit: e.target.value})} className="w-full px-3 py-2 bg-muted rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-nexora-400 border border-border">
+                <option>Tablet</option>
+                <option>Capsule</option>
+                <option>Syrup (Bottle)</option>
+                <option>Injection (Vial)</option>
+                <option>Ointment (Tube)</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-1">
+              <label className="text-xs font-medium">Price per Unit (৳)</label>
+              <input required type="number" value={formData.price} onChange={e => setFormData({...formData, price: Number(e.target.value)})} className="w-full px-3 py-2 bg-muted rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-nexora-400 border border-border" />
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs font-medium">Reorder Warning Level</label>
+              <input required type="number" value={formData.reorderLevel} onChange={e => setFormData({...formData, reorderLevel: Number(e.target.value)})} className="w-full px-3 py-2 bg-muted rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-nexora-400 border border-border" />
+            </div>
+          </div>
+
+          <div className="space-y-1">
+            <label className="text-xs font-medium">Expiry Date</label>
+            <input required type="date" value={formData.expiryDate} onChange={e => setFormData({...formData, expiryDate: e.target.value})} className="w-full px-3 py-2 bg-muted rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-nexora-400 border border-border" />
+          </div>
+
+          <div className="pt-4 flex justify-end gap-2">
+            <button type="button" onClick={() => setIsOpen(false)} className="px-4 py-2 text-sm font-medium hover:bg-muted rounded-lg transition-colors">
+              Cancel
+            </button>
+            <button type="submit" className="px-4 py-2 bg-nexora-600 hover:bg-nexora-700 text-white text-sm font-medium rounded-lg transition-colors">
+              Save Medicine
+            </button>
+          </div>
+        </form>
+      </Modal>
     </div>
   );
 }

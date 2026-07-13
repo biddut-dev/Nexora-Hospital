@@ -1,10 +1,11 @@
 "use client";
 
-import { useState } from "react";
-import { mockBeds } from "@/lib/mock-data";
+import { useState, useEffect } from "react";
 import { cn } from "@/lib/utils";
-import { Bed, Filter, Search, LayoutGrid, List, RefreshCw } from "lucide-react";
+import { Bed as BedIcon, Filter, Search, LayoutGrid, List, UserPlus, Loader2 } from "lucide-react";
 import type { BedType, BedStatus } from "@/types";
+import { useAppStore } from "@/lib/store";
+import { Modal } from "@/components/ui/Modal";
 
 const bedTypeLabels: Record<BedType, string> = {
   general: "General",
@@ -39,21 +40,62 @@ export default function BedManagementPage() {
   const [selectedWard, setSelectedWard] = useState("All Wards");
   const [selectedStatus, setSelectedStatus] = useState<"all" | BedStatus>("all");
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
+  const [search, setSearch] = useState("");
 
-  const filteredBeds = mockBeds.filter((bed) => {
-    const wardMatch = selectedWard === "All Wards" || bed.ward === selectedWard;
-    const statusMatch = selectedStatus === "all" || bed.status === selectedStatus;
-    return wardMatch && statusMatch;
+  const { 
+    patients, beds, doctors, fetchPatients, fetchBeds, admitPatient, 
+    isLoadingBeds, isLoadingPatients 
+  } = useAppStore();
+
+  const [isBookOpen, setIsBookOpen] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [formData, setFormData] = useState({
+    patientId: "",
+    bedId: "",
+    doctorId: ""
   });
 
-  const stats = {
-    total: mockBeds.length,
-    available: mockBeds.filter((b) => b.status === "available").length,
-    occupied: mockBeds.filter((b) => b.status === "occupied").length,
-    reserved: mockBeds.filter((b) => b.status === "reserved").length,
-    cleaning: mockBeds.filter((b) => b.status === "cleaning").length,
-    maintenance: mockBeds.filter((b) => b.status === "maintenance").length,
+  useEffect(() => {
+    fetchBeds();
+    fetchPatients();
+  }, [fetchBeds, fetchPatients]);
+
+  const handleBookBed = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!formData.patientId || !formData.bedId || !formData.doctorId) return;
+    
+    setIsSubmitting(true);
+    try {
+      await admitPatient(formData.patientId, formData.bedId, formData.doctorId);
+      setIsBookOpen(false);
+      setFormData({ patientId: "", bedId: "", doctorId: "" });
+    } catch (error) {
+      console.error(error);
+      alert("Failed to book bed");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
+
+  const filteredBeds = beds.filter((bed) => {
+    const wardMatch = selectedWard === "All Wards" || bed.ward.includes(selectedWard) || (selectedWard === "Emergency" && bed.ward === "Emergency");
+    const statusMatch = selectedStatus === "all" || bed.status === selectedStatus;
+    const searchMatch = search === "" || bed.number.includes(search) || (bed.patientName && bed.patientName.toLowerCase().includes(search.toLowerCase()));
+    return wardMatch && statusMatch && searchMatch;
+  });
+
+  const availableBeds = beds.filter((b) => b.status === "available");
+
+  const stats = {
+    total: beds.length,
+    available: beds.filter((b) => b.status === "available").length,
+    occupied: beds.filter((b) => b.status === "occupied").length,
+    reserved: beds.filter((b) => b.status === "reserved").length,
+    cleaning: beds.filter((b) => b.status === "cleaning").length,
+    maintenance: beds.filter((b) => b.status === "maintenance").length,
+  };
+
+  const occupancyRate = stats.total > 0 ? Math.round((stats.occupied / stats.total) * 100) : 0;
 
   return (
     <div className="space-y-6">
@@ -62,8 +104,11 @@ export default function BedManagementPage() {
           <h1 className="text-2xl font-bold text-foreground">Bed & Cabin Management</h1>
           <p className="text-muted-foreground text-sm mt-1">Visual floor management system — Real-time bed availability</p>
         </div>
-        <button className="flex items-center gap-2 px-4 py-2.5 bg-nexora-600 hover:bg-nexora-700 text-white text-sm font-medium rounded-xl transition-colors">
-          <Bed className="w-4 h-4" />
+        <button 
+          onClick={() => setIsBookOpen(true)}
+          className="flex items-center gap-2 px-4 py-2.5 bg-nexora-600 hover:bg-nexora-700 text-white text-sm font-medium rounded-xl transition-colors"
+        >
+          <BedIcon className="w-4 h-4" />
           Book a Bed
         </button>
       </div>
@@ -81,9 +126,8 @@ export default function BedManagementPage() {
             key={s.status}
             onClick={() => setSelectedStatus(selectedStatus === s.status ? "all" : s.status)}
             className={cn(
-              "nexora-card p-3 text-center transition-all",
-              selectedStatus === s.status && "ring-2",
-              selectedStatus === s.status ? `ring-${s.color.split("-")[1]}-500` : ""
+              "nexora-card p-3 text-center transition-all border-border",
+              selectedStatus === s.status && "ring-2 ring-nexora-500"
             )}
           >
             <div className={`w-8 h-8 ${s.bg} rounded-lg flex items-center justify-center mx-auto mb-1.5`}>
@@ -98,76 +142,96 @@ export default function BedManagementPage() {
       {/* Occupancy Rate */}
       <div className="nexora-card p-4">
         <div className="flex items-center justify-between mb-2">
-          <span className="text-sm font-medium">Overall Occupancy Rate</span>
-          <span className="text-sm font-bold text-amber-600">{Math.round((stats.occupied / stats.total) * 100)}%</span>
+          <div>
+            <h3 className="font-semibold text-sm">Overall Bed Occupancy</h3>
+            <p className="text-xs text-muted-foreground">{stats.occupied} out of {stats.total} beds occupied</p>
+          </div>
+          <span className="text-lg font-bold text-nexora-600">{occupancyRate}%</span>
         </div>
         <div className="h-3 bg-muted rounded-full overflow-hidden">
-          <div
-            className="h-full bg-gradient-to-r from-nexora-500 to-amber-500 rounded-full transition-all"
-            style={{ width: `${Math.round((stats.occupied / stats.total) * 100)}%` }}
-          />
-        </div>
-        <div className="flex justify-between text-xs text-muted-foreground mt-1.5">
-          <span>{stats.occupied} occupied</span>
-          <span>{stats.total} total beds</span>
+          <div className="h-full bg-nexora-500 rounded-full transition-all" style={{ width: `${occupancyRate}%` }} />
         </div>
       </div>
 
-      {/* Filters */}
-      <div className="flex flex-wrap items-center gap-3">
-        <div className="flex gap-1 flex-wrap">
+      {/* Filters & Search */}
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <div className="flex flex-wrap gap-2">
           {WARDS.map((ward) => (
             <button
               key={ward}
               onClick={() => setSelectedWard(ward)}
               className={cn(
-                "px-3 py-1.5 text-xs font-medium rounded-lg border transition-all",
-                selectedWard === ward
-                  ? "bg-nexora-600 text-white border-nexora-600"
-                  : "bg-white dark:bg-gray-900 text-muted-foreground border-border hover:border-nexora-400"
+                "px-3 py-1.5 text-xs font-semibold rounded-lg border transition-all",
+                selectedWard === ward 
+                  ? "bg-nexora-600 text-white border-nexora-600" 
+                  : "bg-card text-muted-foreground border-border hover:bg-muted"
               )}
             >
-              {ward === "All Wards" ? "All" : ward.split(" ")[0] + " " + (ward.split(" ")[1] || "")}
+              {ward}
             </button>
           ))}
         </div>
-        <div className="ml-auto flex gap-2">
-          <button
-            onClick={() => setViewMode("grid")}
-            className={cn("p-2 rounded-lg border transition-colors", viewMode === "grid" ? "bg-nexora-100 border-nexora-300 text-nexora-700" : "border-border text-muted-foreground hover:bg-muted")}
-          >
-            <LayoutGrid className="w-4 h-4" />
-          </button>
-          <button
-            onClick={() => setViewMode("list")}
-            className={cn("p-2 rounded-lg border transition-colors", viewMode === "list" ? "bg-nexora-100 border-nexora-300 text-nexora-700" : "border-border text-muted-foreground hover:bg-muted")}
-          >
-            <List className="w-4 h-4" />
-          </button>
+        
+        <div className="flex gap-2">
+          <div className="relative">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+            <input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search bed, patient..."
+              className="pl-8 pr-3 py-1.5 text-xs bg-muted rounded-lg focus:outline-none w-48 border border-border"
+            />
+          </div>
+          <div className="flex rounded-lg border border-border overflow-hidden">
+            <button 
+              onClick={() => setViewMode("grid")}
+              className={cn("p-2 transition-colors", viewMode === "grid" ? "bg-muted" : "bg-card hover:bg-muted")}
+            >
+              <LayoutGrid className="w-4 h-4 text-muted-foreground" />
+            </button>
+            <button 
+              onClick={() => setViewMode("list")}
+              className={cn("p-2 transition-colors", viewMode === "list" ? "bg-muted" : "bg-card hover:bg-muted")}
+            >
+              <List className="w-4 h-4 text-muted-foreground" />
+            </button>
+          </div>
         </div>
       </div>
 
-      {/* Bed Grid */}
-      {viewMode === "grid" ? (
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
+      {/* Beds Grid / List */}
+      {isLoadingBeds ? (
+        <div className="flex items-center justify-center py-12"><Loader2 className="w-8 h-8 animate-spin text-nexora-600" /></div>
+      ) : filteredBeds.length === 0 ? (
+        <div className="text-center py-12 border border-dashed rounded-2xl text-muted-foreground text-sm">No beds found matching the criteria.</div>
+      ) : viewMode === "grid" ? (
+        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-4">
           {filteredBeds.map((bed) => (
-            <div
-              key={bed.id}
-              className={cn(
-                "rounded-xl border-2 p-3 cursor-pointer hover:shadow-md transition-all group",
-                statusColors[bed.status]
-              )}
-            >
-              <div className="flex items-center justify-between mb-2">
-                <Bed className="w-4 h-4" />
-                <div className={cn("w-2 h-2 rounded-full", statusDot[bed.status])} />
+            <div key={bed.id} className={cn("nexora-card p-4 border-2 flex flex-col justify-between h-36 transition-all", 
+              bed.status === "available" ? "border-green-100 hover:border-green-300" :
+              bed.status === "occupied" ? "border-red-100 hover:border-red-300" :
+              bed.status === "reserved" ? "border-amber-100 hover:border-amber-300" :
+              "border-gray-100 hover:border-gray-300"
+            )}>
+              <div>
+                <div className="flex items-center justify-between">
+                  <span className="font-bold text-lg">{bed.number}</span>
+                  <span className={cn("text-[9px] font-bold px-2 py-0.5 rounded-full uppercase", 
+                    bed.status === "available" ? "bg-green-100 text-green-700" :
+                    bed.status === "occupied" ? "bg-red-100 text-red-700" :
+                    "bg-muted text-muted-foreground"
+                  )}>{bed.status}</span>
+                </div>
+                <p className="text-[10px] text-muted-foreground mt-1 truncate">{bed.ward}</p>
+                <p className="text-[9px] text-muted-foreground capitalize">{bedTypeLabels[bed.type]}</p>
               </div>
-              <p className="font-bold text-sm">{bed.number}</p>
-              <p className="text-[10px] opacity-70 mt-0.5">{bedTypeLabels[bed.type]}</p>
-              {bed.patientName && (
-                <p className="text-[10px] font-medium mt-1.5 truncate opacity-90">{bed.patientName}</p>
-              )}
-              <p className="text-[10px] capitalize mt-1 opacity-70">{bed.status}</p>
+              <div className="mt-2 text-xs font-semibold truncate text-foreground">
+                {bed.patientName || bed.patientId ? (
+                  <span>Patient ID: {bed.patientId?.slice(-6) || 'Admitted'}</span>
+                ) : (
+                  <span className="text-muted-foreground font-normal">Empty</span>
+                )}
+              </div>
             </div>
           ))}
         </div>
@@ -176,7 +240,7 @@ export default function BedManagementPage() {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-border">
-                {["Bed #", "Ward", "Floor", "Type", "Status", "Patient", "Admitted", "Action"].map((h) => (
+                {["Bed Number", "Ward", "Floor", "Type", "Status", "Patient"].map((h) => (
                   <th key={h} className="text-left text-xs font-medium text-muted-foreground uppercase py-3 px-4">{h}</th>
                 ))}
               </tr>
@@ -184,29 +248,68 @@ export default function BedManagementPage() {
             <tbody>
               {filteredBeds.map((bed) => (
                 <tr key={bed.id} className="border-b border-border/50 hover:bg-muted/30">
-                  <td className="py-3 px-4 font-mono font-bold">{bed.number}</td>
+                  <td className="py-3 px-4 font-bold">{bed.number}</td>
                   <td className="py-3 px-4 text-xs text-muted-foreground">{bed.ward}</td>
-                  <td className="py-3 px-4 text-xs text-muted-foreground">Floor {bed.floor}</td>
-                  <td className="py-3 px-4 text-xs">{bedTypeLabels[bed.type]}</td>
+                  <td className="py-3 px-4 text-xs">{bed.floor}</td>
+                  <td className="py-3 px-4 text-xs capitalize">{bedTypeLabels[bed.type]}</td>
                   <td className="py-3 px-4">
-                    <div className="flex items-center gap-1.5">
-                      <div className={cn("w-2 h-2 rounded-full", statusDot[bed.status])} />
-                      <span className="text-xs capitalize">{bed.status}</span>
-                    </div>
+                    <span className={cn("text-[10px] font-medium px-2 py-0.5 rounded-full capitalize", statusColors[bed.status])}>
+                      {bed.status}
+                    </span>
                   </td>
-                  <td className="py-3 px-4 text-xs">{bed.patientName || "—"}</td>
-                  <td className="py-3 px-4 text-xs text-muted-foreground">{bed.admissionDate || "—"}</td>
-                  <td className="py-3 px-4">
-                    <button className="text-xs text-nexora-600 hover:text-nexora-700 font-medium">
-                      {bed.status === "available" ? "Book" : "View"}
-                    </button>
-                  </td>
+                  <td className="py-3 px-4 text-xs font-semibold">{bed.patientName || bed.patientId || "—"}</td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
       )}
+
+      {/* Booking Bed Modal */}
+      <Modal isOpen={isBookOpen} onClose={() => setIsBookOpen(false)} title="Book / Assign Bed">
+        <form onSubmit={handleBookBed} className="space-y-4">
+          <div className="space-y-1">
+            <label className="text-xs font-medium">Select Patient</label>
+            <select required value={formData.patientId} onChange={e => setFormData({...formData, patientId: e.target.value})} className="w-full px-3 py-2 bg-muted rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-nexora-400">
+              <option value="">-- Choose Patient --</option>
+              {patients.filter(p => p.status !== 'admitted').map(p => (
+                <option key={p.id} value={p.id}>{p.name} ({p.phone})</option>
+              ))}
+            </select>
+          </div>
+          
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-1">
+              <label className="text-xs font-medium">Assign Bed</label>
+              <select required value={formData.bedId} onChange={e => setFormData({...formData, bedId: e.target.value})} className="w-full px-3 py-2 bg-muted rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-nexora-400">
+                <option value="">-- Choose Bed --</option>
+                {availableBeds.map(b => (
+                  <option key={b.id} value={b.id}>{b.number} ({b.ward})</option>
+                ))}
+              </select>
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs font-medium">Doctor Assigned</label>
+              <select required value={formData.doctorId} onChange={e => setFormData({...formData, doctorId: e.target.value})} className="w-full px-3 py-2 bg-muted rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-nexora-400">
+                <option value="">-- Choose Doctor --</option>
+                {doctors.map(d => (
+                  <option key={d.id} value={d.id}>Dr. {d.name}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          <div className="pt-4 flex justify-end gap-2">
+            <button type="button" onClick={() => setIsBookOpen(false)} className="px-4 py-2 text-sm font-medium hover:bg-muted rounded-lg transition-colors">
+              Cancel
+            </button>
+            <button disabled={isSubmitting} type="submit" className="px-4 py-2 bg-nexora-600 hover:bg-nexora-700 text-white text-sm font-medium rounded-lg transition-colors disabled:opacity-50 flex items-center gap-2">
+              {isSubmitting && <Loader2 className="w-4 h-4 animate-spin" />}
+              Assign Bed
+            </button>
+          </div>
+        </form>
+      </Modal>
     </div>
   );
 }

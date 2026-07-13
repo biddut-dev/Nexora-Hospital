@@ -1,11 +1,13 @@
 "use client";
 
-import { mockPatients, mockVitals } from "@/lib/mock-data";
+import { mockVitals } from "@/lib/mock-data";
 import { cn } from "@/lib/utils";
 import { Heart, Activity, AlertTriangle, Clock, CheckCircle, Pill, Bell } from "lucide-react";
+import { useAppStore } from "@/lib/store";
 
 export default function NursePage() {
-  const assignedPatients = mockPatients.filter((p) => p.patientType === "ipd" || p.patientType === "emergency");
+  const { patients } = useAppStore();
+  const assignedPatients = patients.filter((p) => p.status === "admitted");
 
   return (
     <div className="space-y-6">
@@ -24,12 +26,12 @@ export default function NursePage() {
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {[
-          { title: "Assigned Patients", value: assignedPatients.length + 8, icon: Heart, color: "text-red-600", bg: "bg-red-50 dark:bg-red-900/20" },
+          { title: "Assigned Patients", value: assignedPatients.length, icon: Heart, color: "text-red-600", bg: "bg-red-50 dark:bg-red-900/20" },
           { title: "Med Due Now", value: 4, icon: Pill, color: "text-nexora-600", bg: "bg-nexora-50 dark:bg-nexora-900/20" },
           { title: "Vitals Recorded", value: 18, icon: Activity, color: "text-blue-600", bg: "bg-blue-50 dark:bg-blue-900/20" },
-          { title: "Critical Alerts", value: 2, icon: AlertTriangle, color: "text-amber-600", bg: "bg-amber-50 dark:bg-amber-900/20" },
+          { title: "Critical Alerts", value: assignedPatients.filter(p=>p.priority==='critical').length, icon: AlertTriangle, color: "text-amber-600", bg: "bg-amber-50 dark:bg-amber-900/20" },
         ].map((s) => (
-          <div key={s.title} className="nexora-card p-4 flex items-center gap-3">
+          <div key={s.title} className="nexora-card p-4 flex items-center gap-3 border-border">
             <div className={`w-10 h-10 ${s.bg} rounded-xl flex items-center justify-center flex-shrink-0`}>
               <s.icon className={`w-5 h-5 ${s.color}`} />
             </div>
@@ -43,17 +45,19 @@ export default function NursePage() {
 
       <div className="grid lg:grid-cols-2 gap-6">
         {/* Patient Cards */}
-        <div className="nexora-card p-5">
+        <div className="nexora-card p-5 border-border">
           <h3 className="font-semibold mb-4">My Patients — Ward Status</h3>
           <div className="space-y-3">
-            {assignedPatients.map((p) => {
+            {assignedPatients.length === 0 ? (
+              <p className="text-sm text-muted-foreground text-center py-8">No patients currently admitted to your ward.</p>
+            ) : assignedPatients.map((p) => {
               const lastVital = mockVitals[mockVitals.length - 1];
               return (
                 <div key={p.id} className={cn(
-                  "flex items-center gap-3 p-3 rounded-xl border transition-colors",
+                  "flex items-center gap-3 p-3 rounded-xl border transition-colors border-border",
                   p.priority === "critical" ? "border-red-200 bg-red-50/50 dark:border-red-800 dark:bg-red-900/5" :
                   p.priority === "urgent" ? "border-amber-200 bg-amber-50/50 dark:border-amber-800 dark:bg-amber-900/5" :
-                  "border-border hover:bg-muted/30"
+                  "hover:bg-muted/30"
                 )}>
                   <div className="relative flex-shrink-0">
                     <div className={cn("w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold",
@@ -66,7 +70,7 @@ export default function NursePage() {
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="font-medium text-sm">{p.name}</p>
-                    <p className="text-xs text-muted-foreground">{p.bedAssigned} · {p.department}</p>
+                    <p className="text-xs text-muted-foreground">{p.bedAssigned || "TBD Bed"} · {p.department}</p>
                   </div>
                   <div className="text-right text-xs flex-shrink-0">
                     <p className="font-bold text-foreground">{lastVital.heartRate} BPM</p>
@@ -79,7 +83,7 @@ export default function NursePage() {
         </div>
 
         {/* Medication Schedule */}
-        <div className="nexora-card p-5">
+        <div className="nexora-card p-5 border-border">
           <h3 className="font-semibold mb-4">Medication Schedule</h3>
           <div className="space-y-2">
             {[
@@ -88,25 +92,19 @@ export default function NursePage() {
               { patient: "Fatima Begum", drug: "Iron Sucrose IV", time: "11:00 AM", status: "upcoming" },
               { patient: "Mosaddek Ahmed", drug: "Cefuroxime 750mg IV", time: "12:00 PM", status: "upcoming" },
               { patient: "Delwar Hossain", drug: "Aspirin 75mg Oral", time: "01:00 PM", status: "upcoming" },
-              { patient: "Karim Hossain", drug: "Levetiracetam 500mg IV", time: "02:00 PM", status: "completed" },
             ].map((med, i) => (
               <div key={i} className={cn(
-                "flex items-center gap-3 p-3 rounded-xl border text-sm transition-colors",
+                "flex items-center gap-3 p-3 rounded-xl border text-sm transition-colors border-border",
                 med.status === "due" ? "border-red-200 bg-red-50 dark:bg-red-900/10" :
-                med.status === "upcoming" ? "border-border hover:bg-muted/30" :
-                "border-border bg-muted/20"
+                "hover:bg-muted/30"
               )}>
                 <div className={cn("w-2.5 h-2.5 rounded-full flex-shrink-0",
-                  med.status === "due" ? "bg-red-500" : med.status === "upcoming" ? "bg-amber-500" : "bg-nexora-500")} />
-                <div className="flex-1 min-w-0">
-                  <p className="font-medium text-xs">{med.drug}</p>
-                  <p className="text-[11px] text-muted-foreground truncate">{med.patient}</p>
+                  med.status === "due" ? "bg-red-500" : "bg-amber-500")} />
+                <div className="flex-1">
+                  <p className="font-medium text-xs text-muted-foreground">{med.patient}</p>
+                  <p className="font-bold text-foreground text-sm">{med.drug}</p>
                 </div>
-                <div className="text-right flex-shrink-0">
-                  <p className="text-xs font-bold">{med.time}</p>
-                  {med.status === "due" && <p className="text-[10px] text-red-600 font-medium">DUE NOW</p>}
-                  {med.status === "completed" && <CheckCircle className="w-3.5 h-3.5 text-nexora-600 ml-auto" />}
-                </div>
+                <span className="text-xs font-semibold text-muted-foreground">{med.time}</span>
               </div>
             ))}
           </div>

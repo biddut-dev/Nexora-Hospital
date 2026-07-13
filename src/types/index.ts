@@ -50,7 +50,7 @@ export interface Patient {
   department?: string;
   doctorAssigned?: string;
   bedAssigned?: string;
-  status: "active" | "discharged" | "transferred";
+  status: "active" | "admitted" | "discharged" | "transferred";
   avatar?: string;
   insuranceId?: string;
 }

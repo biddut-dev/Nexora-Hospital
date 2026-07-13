@@ -1,11 +1,37 @@
 "use client";
 
 import { useState } from "react";
-import { mockBloodBank, mockAmbulances } from "@/lib/mock-data";
 import { cn } from "@/lib/utils";
-import { Droplets, AlertTriangle, CheckCircle, Truck, MapPin, Phone, Clock } from "lucide-react";
+import { Droplets, AlertTriangle, CheckCircle, Navigation } from "lucide-react";
+import { useAppStore } from "@/lib/store";
+import { Modal } from "@/components/ui/Modal";
 
 export default function BloodBankPage() {
+  const { bloodBank, recordBloodDonor } = useAppStore();
+  const [isOpen, setIsOpen] = useState(false);
+  
+  // Donor Form State
+  const [formData, setFormData] = useState({
+    donorName: "",
+    bloodGroup: "A+",
+    units: 1,
+    phone: ""
+  });
+
+  const handleAddDonor = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!formData.donorName || !formData.units) return;
+
+    recordBloodDonor(formData.bloodGroup, Number(formData.units));
+    setIsOpen(false);
+    setFormData({
+      donorName: "",
+      bloodGroup: "A+",
+      units: 1,
+      phone: ""
+    });
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex items-start justify-between flex-wrap gap-4">
@@ -14,12 +40,12 @@ export default function BloodBankPage() {
           <p className="text-muted-foreground text-sm mt-1">Blood inventory, donor management & request tracking</p>
         </div>
         <div className="flex gap-2">
-          <button className="flex items-center gap-2 px-4 py-2.5 border border-border hover:bg-muted text-sm font-medium rounded-xl transition-colors">
-            <Droplets className="w-4 h-4 text-red-500" />
+          <button 
+            onClick={() => setIsOpen(true)}
+            className="flex items-center gap-2 px-4 py-2.5 bg-nexora-600 hover:bg-nexora-700 text-white text-sm font-medium rounded-xl transition-colors"
+          >
+            <Droplets className="w-4 h-4 text-white" />
             Add Donor
-          </button>
-          <button className="flex items-center gap-2 px-4 py-2.5 bg-red-600 hover:bg-red-700 text-white text-sm font-medium rounded-xl transition-colors">
-            Request Blood
           </button>
         </div>
       </div>
@@ -28,12 +54,12 @@ export default function BloodBankPage() {
       <div>
         <h3 className="font-semibold mb-3">Blood Inventory</h3>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-          {mockBloodBank.map((blood) => {
+          {bloodBank.map((blood) => {
             const isCritical = blood.units < 5;
             const isLow = blood.units < 10;
             return (
               <div key={blood.bloodGroup} className={cn(
-                "nexora-card p-5 text-center transition-all hover:shadow-md",
+                "nexora-card p-5 text-center transition-all hover:shadow-md border-border",
                 isCritical && "border-red-300 dark:border-red-700",
                 isLow && !isCritical && "border-amber-300 dark:border-amber-700"
               )}>
@@ -62,7 +88,7 @@ export default function BloodBankPage() {
                     style={{ width: `${Math.min(100, (blood.units / 50) * 100)}%` }}
                   />
                 </div>
-                <p className="text-[10px] text-muted-foreground mt-1.5">Exp: {blood.expiryDate}</p>
+                <p className="text-[10px] text-muted-foreground mt-1.5">Last Updated: {blood.lastUpdated}</p>
               </div>
             );
           })}
@@ -75,14 +101,13 @@ export default function BloodBankPage() {
         <div>
           <p className="font-semibold text-sm text-red-700 dark:text-red-400">Critical Blood Shortage Alert</p>
           <p className="text-xs text-muted-foreground mt-0.5">
-            O- (2 units) and AB- (2 units) are critically low. Urgent donor recruitment required. 3 scheduled surgeries require O- type.
+            O- (3 units) and AB- (2 units) are critically low. Urgent donor recruitment required.
           </p>
-          <button className="mt-2 text-xs text-red-600 font-medium hover:text-red-700">Contact Donors →</button>
         </div>
       </div>
 
       {/* Blood Requests */}
-      <div className="nexora-card p-5">
+      <div className="nexora-card p-5 border-border">
         <h3 className="font-semibold mb-4">Active Blood Requests</h3>
         <div className="space-y-3">
           {[
@@ -99,16 +124,53 @@ export default function BloodBankPage() {
                 <p className="font-medium text-sm">{req.patient}</p>
                 <p className="text-xs text-muted-foreground">{req.units} unit(s) · {req.dept}</p>
               </div>
-              <span className={cn("text-[10px] font-medium px-2 py-0.5 rounded-full",
-                req.status === "fulfilled" ? "bg-green-100 text-green-700" :
-                req.status === "reserved" ? "bg-blue-100 text-blue-700" :
-                "bg-amber-100 text-amber-700")}>
-                {req.status.charAt(0).toUpperCase() + req.status.slice(1)}
+              <span className={cn("text-[10px] font-medium px-2 py-0.5 rounded-full capitalize", 
+                req.status === 'fulfilled' ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'
+              )}>
+                {req.status}
               </span>
             </div>
           ))}
         </div>
       </div>
+
+      {/* Add Donor Modal */}
+      <Modal isOpen={isOpen} onClose={() => setIsOpen(false)} title="Record Blood Donation / Add Donor">
+        <form onSubmit={handleAddDonor} className="space-y-4">
+          <div className="space-y-1">
+            <label className="text-xs font-medium">Donor Full Name</label>
+            <input required placeholder="e.g., Md. Karim Ali" value={formData.donorName} onChange={e => setFormData({...formData, donorName: e.target.value})} className="w-full px-3 py-2 bg-muted rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-nexora-400 border border-border" />
+          </div>
+          
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-1">
+              <label className="text-xs font-medium">Blood Group</label>
+              <select value={formData.bloodGroup} onChange={e => setFormData({...formData, bloodGroup: e.target.value})} className="w-full px-3 py-2 bg-muted rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-nexora-400 border border-border">
+                {["A+", "A-", "B+", "B-", "O+", "O-", "AB+", "AB-"].map(bg => <option key={bg}>{bg}</option>)}
+              </select>
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs font-medium">Units Donated</label>
+              <input required type="number" min={1} max={10} value={formData.units} onChange={e => setFormData({...formData, units: Number(e.target.value)})} className="w-full px-3 py-2 bg-muted rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-nexora-400 border border-border" />
+            </div>
+          </div>
+
+          <div className="space-y-1">
+            <label className="text-xs font-medium">Donor Contact Phone</label>
+            <input required type="tel" placeholder="01XXXXXXXXX" value={formData.phone} onChange={e => setFormData({...formData, phone: e.target.value})} className="w-full px-3 py-2 bg-muted rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-nexora-400 border border-border" />
+          </div>
+
+          <div className="pt-4 flex justify-end gap-2">
+            <button type="button" onClick={() => setIsOpen(false)} className="px-4 py-2 text-sm font-medium hover:bg-muted rounded-lg transition-colors">
+              Cancel
+            </button>
+            <button type="submit" className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-sm font-medium rounded-lg transition-colors flex items-center gap-1.5">
+              <Droplets className="w-4 h-4 text-white" />
+              Save Donation
+            </button>
+          </div>
+        </form>
+      </Modal>
     </div>
   );
 }

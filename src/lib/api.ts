@@ -67,3 +67,52 @@ export async function getCommandCenterStats() {
     return { patients: 0, doctors: 0, availableBeds: 0 };
   }
 }
+
+export async function registerPatient(patientData: any) {
+  const supabase = getSupabase();
+  const { data, error } = await supabase
+    .from('patients')
+    .insert([{
+      name: patientData.name,
+      gender: patientData.gender,
+      dob: patientData.dob,
+      phone: patientData.phone,
+      blood_group: patientData.bloodGroup,
+      contact_address: patientData.contactAddress,
+      status: 'waiting',
+      risk_level: 'low',
+      department: 'General'
+    }])
+    .select()
+    .single();
+
+  if (error) {
+    console.error('Error registering patient:', error);
+    throw error;
+  }
+  return data;
+}
+
+export async function admitPatient(patientId: string, bedId: string, admittingDoctorId: string) {
+  const supabase = getSupabase();
+  
+  const { error: bedError } = await supabase
+    .from('beds')
+    .update({ status: 'occupied' })
+    .eq('id', bedId);
+    
+  if (bedError) throw bedError;
+
+  const { data, error } = await supabase
+    .from('patients')
+    .update({ 
+      status: 'admitted', 
+      bed_assigned: bedId 
+    })
+    .eq('id', patientId)
+    .select()
+    .single();
+    
+  if (error) throw error;
+  return data;
+}

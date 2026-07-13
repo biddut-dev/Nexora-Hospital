@@ -1,20 +1,62 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { mockVitals, mockLabTests } from "@/lib/mock-data";
 import { cn } from "@/lib/utils";
 import {
-  Heart, Activity, Thermometer, Wind, Droplets, Weight, BrainCircuit, Bell, Calendar, FileText, Pill, User, TrendingUp, TrendingDown
+  Heart, Activity, Thermometer, Wind, Droplets, Weight, BrainCircuit, Bell, Calendar, FileText, Pill, TrendingUp
 } from "lucide-react";
 import {
-  LineChart, Line, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend
+  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend
 } from "recharts";
+import { useAppStore } from "@/lib/store";
+import { Modal } from "@/components/ui/Modal";
 
 type TimeRange = "daily" | "weekly" | "monthly";
 
 export default function PatientPortalPage() {
   const [activeTab, setActiveTab] = useState<"health" | "prescriptions" | "reports" | "appointments">("health");
   const [timeRange, setTimeRange] = useState<TimeRange>("weekly");
+  const { doctors, bookAppointment, appointments } = useAppStore();
+  const [isBookOpen, setIsBookOpen] = useState(false);
+
+  // Form State
+  const [apptForm, setApptForm] = useState({
+    doctorId: "",
+    date: new Date().toISOString().split('T')[0],
+    time: "09:00",
+    notes: ""
+  });
+
+  const myAppointments = appointments.filter(a => a.patientId === "NXR-2026-10001");
+
+  const handleBook = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!apptForm.doctorId) return;
+
+    const selectedDoctor = doctors.find(d => d.id === apptForm.doctorId);
+    
+    bookAppointment({
+      patientId: "NXR-2026-10001",
+      patientName: "Rahman Ali",
+      doctorId: apptForm.doctorId,
+      doctorName: selectedDoctor ? selectedDoctor.name : "Doctor",
+      department: selectedDoctor ? selectedDoctor.department : "General",
+      date: apptForm.date,
+      time: apptForm.time,
+      notes: apptForm.notes,
+      priority: "stable"
+    });
+
+    setIsBookOpen(false);
+    setApptForm({
+      doctorId: "",
+      date: new Date().toISOString().split('T')[0],
+      time: "09:00",
+      notes: ""
+    });
+    alert("Appointment request submitted successfully!");
+  };
 
   // Slice vitals for time range
   const vitalsData = timeRange === "daily"
@@ -34,7 +76,7 @@ export default function PatientPortalPage() {
     { label: "BMI", value: `${(latest?.bmi ?? 24.5).toFixed(1)}`, unit: "kg/m²", icon: Weight, color: "text-purple-500", bg: "bg-purple-50 dark:bg-purple-900/20", normal: "18.5-24.9", status: "normal" },
   ];
 
-  const chartData = vitalsData.map((v, i) => ({
+  const chartData = vitalsData.map((v) => ({
     day: new Date(v.timestamp).toLocaleDateString("en-US", timeRange === "daily" ? { hour: "numeric" } : { month: "short", day: "numeric" }),
     heartRate: v.heartRate,
     bp: v.bloodPressureSystolic,
@@ -45,7 +87,7 @@ export default function PatientPortalPage() {
   return (
     <div className="space-y-6">
       {/* Patient Header */}
-      <div className="nexora-card p-5 flex items-center gap-4 bg-gradient-to-r from-nexora-50 to-blue-50 dark:from-nexora-900/10 dark:to-blue-900/10">
+      <div className="nexora-card p-5 flex items-center gap-4 bg-gradient-to-r from-nexora-50 to-blue-50 dark:from-nexora-900/10 dark:to-blue-900/10 border-border">
         <div className="w-16 h-16 rounded-2xl bg-nexora-600 flex items-center justify-center text-white text-2xl font-bold flex-shrink-0">R</div>
         <div className="flex-1">
           <h1 className="text-xl font-bold text-foreground">Rahman Ali</h1>
@@ -53,13 +95,12 @@ export default function PatientPortalPage() {
           <p className="text-xs text-muted-foreground mt-0.5">Primary Physician: Dr. Priya Sharma · Cardiology</p>
         </div>
         <div className="flex gap-3 flex-shrink-0">
-          <button className="flex items-center gap-1.5 px-3 py-2 bg-nexora-600 hover:bg-nexora-700 text-white text-xs font-medium rounded-lg transition-colors">
+          <button 
+            onClick={() => setIsBookOpen(true)}
+            className="flex items-center gap-1.5 px-3 py-2 bg-nexora-600 hover:bg-nexora-700 text-white text-xs font-medium rounded-lg transition-colors"
+          >
             <Calendar className="w-3.5 h-3.5" />
             Book Appointment
-          </button>
-          <button className="flex items-center gap-1.5 px-3 py-2 border border-border hover:bg-muted text-xs font-medium rounded-lg transition-colors">
-            <Bell className="w-3.5 h-3.5" />
-            Reminders
           </button>
         </div>
       </div>
@@ -114,7 +155,7 @@ export default function PatientPortalPage() {
           {/* Vital Cards */}
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
             {vitalCards.map((v) => (
-              <div key={v.label} className={`nexora-card p-4 text-center ${v.bg} border-0`}>
+              <div key={v.label} className={cn("nexora-card p-4 text-center border-0", v.bg)}>
                 <div className={`w-9 h-9 rounded-xl bg-white dark:bg-gray-900 flex items-center justify-center mx-auto mb-2 shadow-sm`}>
                   <v.icon className={`w-4 h-4 ${v.color}`} />
                 </div>
@@ -127,7 +168,7 @@ export default function PatientPortalPage() {
           </div>
 
           {/* Charts */}
-          <div className="nexora-card p-5">
+          <div className="nexora-card p-5 border-border">
             <div className="flex items-center justify-between mb-4">
               <h3 className="font-semibold">Health Trends</h3>
               <div className="flex rounded-lg border border-border overflow-hidden text-xs">
@@ -158,7 +199,7 @@ export default function PatientPortalPage() {
       )}
 
       {activeTab === "prescriptions" && (
-        <div className="nexora-card p-5">
+        <div className="nexora-card p-5 border-border">
           <h3 className="font-semibold mb-4">Current Prescriptions</h3>
           <div className="space-y-3">
             {[
@@ -176,7 +217,6 @@ export default function PatientPortalPage() {
                   <p className="text-xs text-muted-foreground">{rx.dose} · {rx.duration}</p>
                   <p className="text-xs text-muted-foreground mt-0.5">Prescribed by {rx.by} on {rx.date}</p>
                 </div>
-                <button className="text-xs text-nexora-600 font-medium">View</button>
               </div>
             ))}
           </div>
@@ -184,13 +224,13 @@ export default function PatientPortalPage() {
       )}
 
       {activeTab === "reports" && (
-        <div className="nexora-card p-5">
+        <div className="nexora-card p-5 border-border">
           <h3 className="font-semibold mb-4">Lab Reports</h3>
           <div className="space-y-3">
             {mockLabTests.map((test) => (
               <div key={test.id} className={cn(
-                "flex items-start gap-3 p-4 rounded-xl border transition-colors",
-                test.isAbnormal ? "border-red-200 bg-red-50/30 dark:border-red-800 dark:bg-red-900/10" : "border-border hover:bg-muted/30"
+                "flex items-start gap-3 p-4 rounded-xl border transition-colors border-border",
+                test.isAbnormal ? "border-red-200 bg-red-50/30 dark:border-red-800 dark:bg-red-900/10" : "hover:bg-muted/30"
               )}>
                 <div className={cn("w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0",
                   test.isAbnormal ? "bg-red-100 dark:bg-red-900/30" : "bg-nexora-100 dark:bg-nexora-900/30")}>
@@ -204,16 +244,81 @@ export default function PatientPortalPage() {
                   <p className="text-xs text-muted-foreground">{test.requestedBy} · {test.requestDate}</p>
                   {test.result && <p className="text-xs text-muted-foreground mt-1">{test.result}</p>}
                 </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {activeTab === "appointments" && (
+        <div className="nexora-card p-5 border-border">
+          <h3 className="font-semibold mb-4">My Booked Appointments</h3>
+          <div className="space-y-3">
+            {myAppointments.length === 0 ? (
+              <p className="text-sm text-muted-foreground text-center py-8">No appointments requested yet.</p>
+            ) : myAppointments.map((appt) => (
+              <div key={appt.id} className="flex items-center gap-3 p-4 rounded-xl border border-border hover:bg-muted/30 transition-colors">
+                <div className="w-10 h-10 bg-nexora-100 dark:bg-nexora-900/30 rounded-xl flex items-center justify-center flex-shrink-0">
+                  <Calendar className="w-5 h-5 text-nexora-600" />
+                </div>
+                <div className="flex-1">
+                  <p className="font-semibold text-sm text-foreground">Dr. {appt.doctorName}</p>
+                  <p className="text-xs text-muted-foreground">{appt.department} · Token: {appt.tokenNumber || "TBD"}</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">Scheduled for {appt.date} at {appt.time}</p>
+                </div>
                 <span className={cn("text-[10px] font-medium px-2 py-0.5 rounded-full capitalize",
-                  test.status === "completed" || test.status === "approved" ? "bg-green-100 text-green-700" :
-                  test.status === "processing" ? "bg-blue-100 text-blue-700" : "bg-amber-100 text-amber-700")}>
-                  {test.status.replace("_", " ")}
+                  appt.status === "completed" ? "bg-green-100 text-green-700" :
+                  appt.status === "waiting" ? "bg-amber-100 text-amber-700 animate-pulse" :
+                  "bg-blue-100 text-blue-700")}>
+                  {appt.status}
                 </span>
               </div>
             ))}
           </div>
         </div>
       )}
+
+      {/* Book Appointment Modal */}
+      <Modal isOpen={isBookOpen} onClose={() => setIsBookOpen(false)} title="Book New Consultation">
+        <form onSubmit={handleBook} className="space-y-4">
+          <div className="space-y-1">
+            <label className="text-xs font-medium">Select Doctor</label>
+            <select required value={apptForm.doctorId} onChange={e => setApptForm({...apptForm, doctorId: e.target.value})} className="w-full px-3 py-2 bg-muted rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-nexora-400 border border-border">
+              <option value="">-- Choose Doctor --</option>
+              {doctors.map(d => (
+                <option key={d.id} value={d.id}>Dr. {d.name} ({d.specialization})</option>
+              ))}
+            </select>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-1">
+              <label className="text-xs font-medium">Date</label>
+              <input required type="date" value={apptForm.date} onChange={e => setApptForm({...apptForm, date: e.target.value})} className="w-full px-3 py-2 bg-muted rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-nexora-400 border border-border" />
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs font-medium">Preferred Time Slot</label>
+              <select value={apptForm.time} onChange={e => setApptForm({...apptForm, time: e.target.value})} className="w-full px-3 py-2 bg-muted rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-nexora-400 border border-border">
+                {["09:00", "09:30", "10:00", "10:30", "11:00", "11:30", "12:00", "14:00", "14:30", "15:00"].map(t => <option key={t}>{t}</option>)}
+              </select>
+            </div>
+          </div>
+
+          <div className="space-y-1">
+            <label className="text-xs font-medium">Reason for Consultation (Optional)</label>
+            <textarea placeholder="Describe your symptoms or reason for visit..." value={apptForm.notes} onChange={e => setApptForm({...apptForm, notes: e.target.value})} rows={2} className="w-full px-3 py-2 bg-muted rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-nexora-400 border border-border" />
+          </div>
+
+          <div className="pt-4 flex justify-end gap-2">
+            <button type="button" onClick={() => setIsBookOpen(false)} className="px-4 py-2 text-sm font-medium hover:bg-muted rounded-lg transition-colors">
+              Cancel
+            </button>
+            <button type="submit" className="px-4 py-2 bg-nexora-600 hover:bg-nexora-700 text-white text-sm font-medium rounded-lg transition-colors">
+              Request Appointment
+            </button>
+          </div>
+        </form>
+      </Modal>
     </div>
   );
 }

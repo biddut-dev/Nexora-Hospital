@@ -1,18 +1,54 @@
 "use client";
 
-import { useState } from "react";
-import { mockPatients, mockBeds } from "@/lib/mock-data";
+import { useState, useEffect } from "react";
 import { cn } from "@/lib/utils";
-import { Bed, Users, Activity, AlertTriangle, Plus, Search, UserPlus, ChevronRight, Clock } from "lucide-react";
+import { Bed, Users, Activity, ChevronRight, UserPlus, Loader2 } from "lucide-react";
+import { useAppStore } from "@/lib/store";
+import { Modal } from "@/components/ui/Modal";
 
 export default function IPDPage() {
   const [activeTab, setActiveTab] = useState<"overview" | "admissions" | "beds">("overview");
-  const [search, setSearch] = useState("");
+  
+  const { 
+    patients, beds, doctors, fetchPatients, fetchBeds, admitPatient, 
+    isLoadingPatients, isLoadingBeds 
+  } = useAppStore();
 
-  const ipdPatients = mockPatients.filter((p) => p.patientType === "ipd");
-  const availableBeds = mockBeds.filter((b) => b.status === "available");
-  const occupiedBeds = mockBeds.filter((b) => b.status === "occupied");
-  const icuBeds = mockBeds.filter((b) => b.ward.includes("ICU") || b.ward.includes("CCU"));
+  // Modal State
+  const [isAdmitOpen, setIsAdmitOpen] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [formData, setFormData] = useState({
+    patientId: "",
+    bedId: "",
+    doctorId: ""
+  });
+
+  useEffect(() => {
+    fetchPatients();
+    fetchBeds();
+  }, [fetchPatients, fetchBeds]);
+
+  const handleAdmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!formData.patientId || !formData.bedId || !formData.doctorId) return;
+    
+    setIsSubmitting(true);
+    try {
+      await admitPatient(formData.patientId, formData.bedId, formData.doctorId);
+      setIsAdmitOpen(false);
+      setFormData({ patientId: "", bedId: "", doctorId: "" });
+    } catch (error) {
+      console.error(error);
+      alert("Failed to admit patient");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const ipdPatients = patients.filter(p => p.status === 'admitted');
+  const availableBeds = beds.filter(b => b.status === 'available');
+  const occupiedBeds = beds.filter(b => b.status === 'occupied');
+  const icuBeds = beds.filter((b) => b.ward.includes("ICU") || b.ward.includes("CCU"));
   const icuOccupied = icuBeds.filter((b) => b.status === "occupied");
 
   return (
@@ -22,7 +58,10 @@ export default function IPDPage() {
           <h1 className="text-2xl font-bold text-foreground">IPD Management</h1>
           <p className="text-muted-foreground text-sm mt-1">Indoor Patient Department — Admissions, Bed Management & Monitoring</p>
         </div>
-        <button className="flex items-center gap-2 px-4 py-2.5 bg-nexora-600 hover:bg-nexora-700 text-white text-sm font-medium rounded-xl transition-colors">
+        <button 
+          onClick={() => setIsAdmitOpen(true)}
+          className="flex items-center gap-2 px-4 py-2.5 bg-nexora-600 hover:bg-nexora-700 text-white text-sm font-medium rounded-xl transition-colors"
+        >
           <UserPlus className="w-4 h-4" />
           New Admission
         </button>
@@ -31,7 +70,7 @@ export default function IPDPage() {
       {/* Stats */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {[
-          { title: "Current Admissions", value: ipdPatients.length + 244, icon: Users, color: "text-blue-600", bg: "bg-blue-50 dark:bg-blue-900/20" },
+          { title: "Current Admissions", value: ipdPatients.length, icon: Users, color: "text-blue-600", bg: "bg-blue-50 dark:bg-blue-900/20" },
           { title: "ICU Patients", value: icuOccupied.length, icon: Activity, color: "text-red-600", bg: "bg-red-50 dark:bg-red-900/20" },
           { title: "Available Beds", value: availableBeds.length, icon: Bed, color: "text-nexora-600", bg: "bg-nexora-50 dark:bg-nexora-900/20" },
           { title: "Discharges Today", value: 8, icon: ChevronRight, color: "text-purple-600", bg: "bg-purple-50 dark:bg-purple-900/20" },
@@ -70,14 +109,12 @@ export default function IPDPage() {
           <div className="nexora-card p-5">
             <h3 className="font-semibold mb-4">Ward Occupancy</h3>
             {[
-              { ward: "Ward 1 — General", total: 20, occupied: 16 },
-              { ward: "Ward 2 — Cabin", total: 10, occupied: 7 },
-              { ward: "Intensive Care Unit", total: 8, occupied: 7 },
-              { ward: "Cardiac Care Unit", total: 6, occupied: 5 },
-              { ward: "Neonatal ICU", total: 8, occupied: 3 },
-              { ward: "Emergency Ward", total: 12, occupied: 8 },
+              { ward: "Ward 1 — General", total: 20, occupied: occupiedBeds.filter(b=>b.ward.includes('General')).length },
+              { ward: "Intensive Care Unit", total: 8, occupied: occupiedBeds.filter(b=>b.ward.includes('ICU')).length },
+              { ward: "Emergency Ward", total: 12, occupied: occupiedBeds.filter(b=>b.ward.includes('Emergency')).length },
             ].map((w) => {
-              const pct = Math.round((w.occupied / w.total) * 100);
+              const total = w.total || 1;
+              const pct = Math.round((w.occupied / total) * 100);
               return (
                 <div key={w.ward} className="mb-3">
                   <div className="flex justify-between text-xs mb-1">
@@ -99,26 +136,20 @@ export default function IPDPage() {
 
           {/* Recent Admissions */}
           <div className="nexora-card p-5">
-            <h3 className="font-semibold mb-4">Recent Admissions</h3>
-            <div className="space-y-3">
-              {ipdPatients.map((p) => (
+            <h3 className="font-semibold mb-4">Admitted Patients</h3>
+            <div className="space-y-3 h-[300px] overflow-y-auto pr-2 scrollbar-thin">
+              {isLoadingPatients || isLoadingBeds ? (
+                <div className="flex justify-center py-4"><Loader2 className="w-5 h-5 animate-spin" /></div>
+              ) : ipdPatients.length === 0 ? (
+                <p className="text-sm text-muted-foreground text-center py-4">No admitted patients.</p>
+              ) : ipdPatients.map((p) => (
                 <div key={p.id} className="flex items-center gap-3 p-3 rounded-xl border border-border hover:bg-muted/30 transition-colors">
                   <div className="w-9 h-9 rounded-full bg-nexora-100 dark:bg-nexora-900/30 flex items-center justify-center text-sm font-bold text-nexora-700 flex-shrink-0">
                     {p.name.charAt(0)}
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="font-medium text-sm">{p.name}</p>
-                    <p className="text-xs text-muted-foreground">{p.bedAssigned} · {p.department} · Dr. {p.doctorAssigned?.split(". ")[1]}</p>
-                  </div>
-                  <div className="flex flex-col items-end gap-1">
-                    <span className={cn(
-                      "text-[10px] font-medium px-2 py-0.5 rounded-full",
-                      p.priority === "critical" ? "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400" :
-                      p.priority === "urgent" ? "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400" :
-                      "bg-nexora-100 text-nexora-700"
-                    )}>
-                      {p.priority?.toUpperCase()}
-                    </span>
+                    <p className="text-xs text-muted-foreground">Bed {p.bedAssigned || 'TBD'}</p>
                   </div>
                 </div>
               ))}
@@ -127,46 +158,51 @@ export default function IPDPage() {
         </div>
       )}
 
-      {activeTab === "admissions" && (
-        <div className="nexora-card">
-          <div className="p-5 border-b border-border">
-            <h3 className="font-semibold">All Admitted Patients</h3>
+      {/* Admission Modal */}
+      <Modal isOpen={isAdmitOpen} onClose={() => setIsAdmitOpen(false)} title="New Admission">
+        <form onSubmit={handleAdmit} className="space-y-4">
+          <div className="space-y-1">
+            <label className="text-xs font-medium">Select Patient</label>
+            <select required value={formData.patientId} onChange={e => setFormData({...formData, patientId: e.target.value})} className="w-full px-3 py-2 bg-muted rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-nexora-400">
+              <option value="">-- Choose Patient --</option>
+              {patients.filter(p => p.status !== 'admitted').map(p => (
+                <option key={p.id} value={p.id}>{p.name} ({p.phone})</option>
+              ))}
+            </select>
           </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-border">
-                  {["Patient ID", "Name", "Age/Sex", "Department", "Bed", "Doctor", "Admitted", "Priority"].map((h) => (
-                    <th key={h} className="text-left text-xs font-medium text-muted-foreground uppercase py-3 px-4">{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {mockPatients.filter((p) => p.patientType === "ipd").map((p) => (
-                  <tr key={p.id} className="border-b border-border/50 hover:bg-muted/30">
-                    <td className="py-3 px-4 font-mono text-xs text-nexora-600">{p.id}</td>
-                    <td className="py-3 px-4 font-medium">{p.name}</td>
-                    <td className="py-3 px-4 text-muted-foreground text-xs">{p.age}y / {p.gender.charAt(0).toUpperCase()}</td>
-                    <td className="py-3 px-4 text-xs">{p.department}</td>
-                    <td className="py-3 px-4 font-mono text-xs font-medium">{p.bedAssigned}</td>
-                    <td className="py-3 px-4 text-xs text-muted-foreground">{p.doctorAssigned}</td>
-                    <td className="py-3 px-4 text-xs text-muted-foreground">{p.registrationDate}</td>
-                    <td className="py-3 px-4">
-                      <span className={cn(
-                        "text-[10px] font-medium px-2 py-0.5 rounded-full",
-                        p.priority === "critical" ? "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400" :
-                        "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400"
-                      )}>
-                        {(p.priority || "stable").toUpperCase()}
-                      </span>
-                    </td>
-                  </tr>
+          
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-1">
+              <label className="text-xs font-medium">Assign Bed</label>
+              <select required value={formData.bedId} onChange={e => setFormData({...formData, bedId: e.target.value})} className="w-full px-3 py-2 bg-muted rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-nexora-400">
+                <option value="">-- Choose Bed --</option>
+                {availableBeds.map(b => (
+                  <option key={b.id} value={b.id}>{b.number} ({b.ward})</option>
                 ))}
-              </tbody>
-            </table>
+              </select>
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs font-medium">Admitting Doctor</label>
+              <select required value={formData.doctorId} onChange={e => setFormData({...formData, doctorId: e.target.value})} className="w-full px-3 py-2 bg-muted rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-nexora-400">
+                <option value="">-- Choose Doctor --</option>
+                {doctors.map(d => (
+                  <option key={d.id} value={d.id}>Dr. {d.name}</option>
+                ))}
+              </select>
+            </div>
           </div>
-        </div>
-      )}
+
+          <div className="pt-4 flex justify-end gap-2">
+            <button type="button" onClick={() => setIsAdmitOpen(false)} className="px-4 py-2 text-sm font-medium hover:bg-muted rounded-lg transition-colors">
+              Cancel
+            </button>
+            <button disabled={isSubmitting} type="submit" className="px-4 py-2 bg-nexora-600 hover:bg-nexora-700 text-white text-sm font-medium rounded-lg transition-colors disabled:opacity-50 flex items-center gap-2">
+              {isSubmitting && <Loader2 className="w-4 h-4 animate-spin" />}
+              Admit Patient
+            </button>
+          </div>
+        </form>
+      </Modal>
     </div>
   );
 }

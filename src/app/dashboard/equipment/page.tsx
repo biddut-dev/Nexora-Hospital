@@ -1,10 +1,39 @@
 "use client";
 
-import { mockEquipment } from "@/lib/mock-data";
+import { useState } from "react";
 import { cn } from "@/lib/utils";
-import { Settings2, AlertTriangle, CheckCircle, Clock, BrainCircuit, Wrench, Plus } from "lucide-react";
+import { Settings2, CheckCircle, AlertTriangle, Wrench, BrainCircuit, Plus } from "lucide-react";
+import { useAppStore } from "@/lib/store";
+import { Modal } from "@/components/ui/Modal";
 
 export default function EquipmentPage() {
+  const { equipment, addEquipment } = useAppStore();
+  const [isOpen, setIsOpen] = useState(false);
+
+  // Form State
+  const [formData, setFormData] = useState({
+    name: "",
+    type: "Ventilator",
+    location: "ICU-1",
+    status: "operational" as any,
+    serialNumber: ""
+  });
+
+  const handleAddEquipment = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!formData.name || !formData.serialNumber) return;
+
+    addEquipment(formData);
+    setIsOpen(false);
+    setFormData({
+      name: "",
+      type: "Ventilator",
+      location: "ICU-1",
+      status: "operational",
+      serialNumber: ""
+    });
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex items-start justify-between flex-wrap gap-4">
@@ -12,7 +41,10 @@ export default function EquipmentPage() {
           <h1 className="text-2xl font-bold">Equipment & Asset Management</h1>
           <p className="text-muted-foreground text-sm mt-1">Track, maintain & schedule hospital equipment • AI predictive maintenance</p>
         </div>
-        <button className="flex items-center gap-2 px-4 py-2.5 bg-nexora-600 hover:bg-nexora-700 text-white text-sm font-medium rounded-xl transition-colors">
+        <button 
+          onClick={() => setIsOpen(true)}
+          className="flex items-center gap-2 px-4 py-2.5 bg-nexora-600 hover:bg-nexora-700 text-white text-sm font-medium rounded-xl transition-colors"
+        >
           <Plus className="w-4 h-4" />
           Add Equipment
         </button>
@@ -20,12 +52,12 @@ export default function EquipmentPage() {
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {[
-          { title: "Total Equipment", value: mockEquipment.length + 189, icon: Settings2, color: "text-blue-600", bg: "bg-blue-50 dark:bg-blue-900/20" },
-          { title: "Operational", value: mockEquipment.filter((e) => e.status === "operational").length + 176, icon: CheckCircle, color: "text-nexora-600", bg: "bg-nexora-50 dark:bg-nexora-900/20" },
-          { title: "Under Maintenance", value: mockEquipment.filter((e) => e.status === "maintenance").length + 8, icon: Wrench, color: "text-amber-600", bg: "bg-amber-50 dark:bg-amber-900/20" },
-          { title: "Faulty", value: 5, icon: AlertTriangle, color: "text-red-600", bg: "bg-red-50 dark:bg-red-900/20" },
+          { title: "Total Equipment", value: equipment.length, icon: Settings2, color: "text-blue-600", bg: "bg-blue-50 dark:bg-blue-900/20" },
+          { title: "Operational", value: equipment.filter((e) => e.status === "operational").length, icon: CheckCircle, color: "text-nexora-600", bg: "bg-nexora-50 dark:bg-nexora-900/20" },
+          { title: "Under Maintenance", value: equipment.filter((e) => e.status === "maintenance").length, icon: Wrench, color: "text-amber-600", bg: "bg-amber-50 dark:bg-amber-900/20" },
+          { title: "Faulty", value: equipment.filter((e) => e.status === "faulty").length, icon: AlertTriangle, color: "text-red-600", bg: "bg-red-50 dark:bg-red-900/20" },
         ].map((s) => (
-          <div key={s.title} className="nexora-card p-4 flex items-center gap-3">
+          <div key={s.title} className="nexora-card p-4 flex items-center gap-3 border-border">
             <div className={`w-10 h-10 ${s.bg} rounded-xl flex items-center justify-center flex-shrink-0`}>
               <s.icon className={`w-5 h-5 ${s.color}`} />
             </div>
@@ -60,7 +92,7 @@ export default function EquipmentPage() {
       </div>
 
       {/* Equipment Table */}
-      <div className="nexora-card overflow-hidden">
+      <div className="nexora-card overflow-hidden border-border">
         <div className="p-5 border-b border-border"><h3 className="font-semibold">Equipment Registry</h3></div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
@@ -72,7 +104,7 @@ export default function EquipmentPage() {
               </tr>
             </thead>
             <tbody>
-              {mockEquipment.map((eq) => (
+              {equipment.map((eq) => (
                 <tr key={eq.id} className="border-b border-border/50 hover:bg-muted/30">
                   <td className="py-3 px-4 font-medium">{eq.name}</td>
                   <td className="py-3 px-4 text-xs text-muted-foreground">{eq.type}</td>
@@ -94,6 +126,60 @@ export default function EquipmentPage() {
           </table>
         </div>
       </div>
+
+      {/* Add Equipment Modal */}
+      <Modal isOpen={isOpen} onClose={() => setIsOpen(false)} title="Register Medical Asset">
+        <form onSubmit={handleAddEquipment} className="space-y-4">
+          <div className="space-y-1">
+            <label className="text-xs font-medium">Equipment Name</label>
+            <input required placeholder="e.g., Defibrillator Philips XL+" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} className="w-full px-3 py-2 bg-muted rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-nexora-400 border border-border" />
+          </div>
+          
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-1">
+              <label className="text-xs font-medium">Equipment Type</label>
+              <select value={formData.type} onChange={e => setFormData({...formData, type: e.target.value})} className="w-full px-3 py-2 bg-muted rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-nexora-400 border border-border">
+                <option>Ventilator</option>
+                <option>Monitor</option>
+                <option>MRI</option>
+                <option>CT Scanner</option>
+                <option>Oxygen Concentrator</option>
+                <option>Defibrillator</option>
+                <option>ECG Machine</option>
+              </select>
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs font-medium">Location (Ward/Room)</label>
+              <input required placeholder="e.g., OT-2, Ward 1, ICU-2" value={formData.location} onChange={e => setFormData({...formData, location: e.target.value})} className="w-full px-3 py-2 bg-muted rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-nexora-400 border border-border" />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-1">
+              <label className="text-xs font-medium">Serial Number</label>
+              <input required placeholder="e.g., SN-2026-9901" value={formData.serialNumber} onChange={e => setFormData({...formData, serialNumber: e.target.value})} className="w-full px-3 py-2 bg-muted rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-nexora-400 border border-border" />
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs font-medium">Operational Status</label>
+              <select value={formData.status} onChange={e => setFormData({...formData, status: e.target.value as any})} className="w-full px-3 py-2 bg-muted rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-nexora-400 border border-border">
+                <option value="operational">Operational</option>
+                <option value="maintenance">Maintenance</option>
+                <option value="faulty">Faulty</option>
+                <option value="reserved">Reserved</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="pt-4 flex justify-end gap-2">
+            <button type="button" onClick={() => setIsOpen(false)} className="px-4 py-2 text-sm font-medium hover:bg-muted rounded-lg transition-colors">
+              Cancel
+            </button>
+            <button type="submit" className="px-4 py-2 bg-nexora-600 hover:bg-nexora-700 text-white text-sm font-medium rounded-lg transition-colors">
+              Register Asset
+            </button>
+          </div>
+        </form>
+      </Modal>
     </div>
   );
 }
