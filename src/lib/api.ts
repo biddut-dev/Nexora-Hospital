@@ -74,14 +74,16 @@ export async function registerPatient(patientData: any) {
     .from('patients')
     .insert([{
       name: patientData.name,
+      age: patientData.age,
       gender: patientData.gender,
-      dob: patientData.dob,
       phone: patientData.phone,
       blood_group: patientData.bloodGroup,
-      contact_address: patientData.contactAddress,
+      address: patientData.address,
+      emergency_contact: patientData.emergencyContact || patientData.phone,
+      patient_type: patientData.patientType || 'opd',
+      priority: 'stable',
       status: 'waiting',
-      risk_level: 'low',
-      department: 'General'
+      department: patientData.department || 'General'
     }])
     .select()
     .single();
@@ -98,7 +100,11 @@ export async function admitPatient(patientId: string, bedId: string, admittingDo
   
   const { error: bedError } = await supabase
     .from('beds')
-    .update({ status: 'occupied' })
+    .update({ 
+      status: 'occupied',
+      patient_id: patientId,
+      admission_date: new Date().toISOString()
+    })
     .eq('id', bedId);
     
   if (bedError) throw bedError;
@@ -107,7 +113,8 @@ export async function admitPatient(patientId: string, bedId: string, admittingDo
     .from('patients')
     .update({ 
       status: 'admitted', 
-      bed_assigned: bedId 
+      bed_assigned: bedId,
+      doctor_assigned: admittingDoctorId
     })
     .eq('id', patientId)
     .select()

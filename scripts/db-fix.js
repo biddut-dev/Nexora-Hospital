@@ -2,7 +2,11 @@ import pg from 'pg';
 const { Client } = pg;
 
 const client = new Client({
-  connectionString: 'postgresql://postgres:@NXHospital%511@db.gcvlflzjvxmrscrfzdot.supabase.co:5432/postgres'
+  host: 'aws-0-ap-northeast-1.pooler.supabase.com',
+  port: 6543,
+  user: 'postgres.gcvlflzjvxmrscrfzdot',
+  database: 'postgres',
+  password: '@NXHospital%511'
 });
 
 async function run() {
