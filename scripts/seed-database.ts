@@ -166,7 +166,7 @@ async function run() {
 
     if (patUuid && docUuid) {
       // Map appointment status or fallback
-      let apptStatus = appt.status;
+      let apptStatus: string = appt.status;
       if (apptStatus === 'in_progress') apptStatus = 'active'; // map to simple text status
       
       await client.query(`
